@@ -1123,6 +1123,10 @@ def export_premisas(state):
 # MAIN APP
 # ══════════════════════════════════════════════════════════════════════
 def vista_premisas():
+    import sys as _sys
+    def _chk(n):
+        print(f">>> STEP {n}", file=_sys.stderr, flush=True)
+    _chk(1)
     try:
         st.set_page_config(
             page_title="Premisas CND", page_icon="⚡",
@@ -1130,6 +1134,7 @@ def vista_premisas():
         )
     except Exception:
         pass  # already called by parent app
+    _chk(2)
     st.markdown("""
 <style>
 .week-badge {background:#1F3864;color:white;padding:6px 18px;border-radius:6px;
@@ -1166,15 +1171,18 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
     st.markdown("## ⚡ Módulo de Premisas")
 
     # ── Session state init ────────────────────────────────────────────
+    _chk(5)
     for key in ["plantilla","prem_df_nuevas","prem_df_viejas","prem_df_relevantes",
                 "prem_indisp_data","prem_df_proyectos","prem_current_week","prem_weeks",
                 "prem_lineas_lookup","prem_plantilla_bytes"]:
         if key not in st.session_state:
             st.session_state[key] = None
+    _chk(6)
 
     # ══════════════════════════════════════════════════════════════════
     # SIDEBAR
     # ══════════════════════════════════════════════════════════════════
+    _chk(7)
     with st.sidebar:
         st.title("📂 Archivos")
         st.divider()
@@ -1469,27 +1477,15 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
 
 
 
-try:
-    st.set_page_config(page_title="Premisas CND", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
-except Exception:
-    pass
-
 import sys as _sys
-
-# Write to stderr so it appears in Cloud logs
-print(">>> Iniciando vista_premisas()", file=_sys.stderr, flush=True)
-
+print(">>> Llamando vista_premisas()", file=_sys.stderr, flush=True)
 try:
     vista_premisas()
 except BaseException as _e:
     import traceback as _tb
-    _msg = f"{type(_e).__name__}: {_e}"
-    _trace = _tb.format_exc()
-    print(f">>> CRASH: {_msg}", file=_sys.stderr, flush=True)
-    print(_trace, file=_sys.stderr, flush=True)
-    # Try to show on screen
+    print(f">>> CRASH: {type(_e).__name__}: {_e}", file=_sys.stderr, flush=True)
+    print(_tb.format_exc(), file=_sys.stderr, flush=True)
     try:
-        st.error(f"**Error:** {_msg}")
-        st.code(_trace)
-    except Exception as _e2:
-        print(f">>> st.error also failed: {_e2}", file=_sys.stderr, flush=True)
+        st.error(f"**Error:** {type(_e).__name__}: {_e}")
+        st.code(_tb.format_exc())
+    except: pass
