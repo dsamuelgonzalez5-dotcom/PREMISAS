@@ -1124,8 +1124,8 @@ def export_premisas(state):
 # ══════════════════════════════════════════════════════════════════════
 def vista_premisas():
     import sys as _sys
-    def _log(m): print(m, file=_sys.stderr, flush=True)
-    _log("ok")
+    def _L(m): print(m, file=_sys.stderr, flush=True)
+    _L("1")
     try:
         st.set_page_config(
             page_title="Premisas CND", page_icon="⚡",
@@ -1179,6 +1179,8 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
     # SIDEBAR
     # ══════════════════════════════════════════════════════════════════
     with st.sidebar:
+        import sys as _s; _S = lambda m: print(m, file=_s.stderr, flush=True)
+        _S("sb")
         st.title("📂 Archivos")
         st.divider()
 
@@ -1288,6 +1290,7 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
     # ══════════════════════════════════════════════════════════════════
     # MAIN CONTENT
     # ══════════════════════════════════════════════════════════════════
+    import sys as _sm; print("main", file=_sm.stderr, flush=True)
     if st.session_state.prem_df_nuevas is None:
         st.info("👈 Cargue los archivos en el panel lateral y presione **Procesar** para comenzar.")
         return
