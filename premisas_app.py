@@ -1467,6 +1467,8 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
             st.success("Cambios aplicados"); st.rerun()
 
 
+import sys as _sys
+print("Premisas CND iniciando...", file=_sys.stderr, flush=True)
 try:
     vista_premisas()
 except BaseException as _e:
