@@ -1186,8 +1186,7 @@ def vista_premisas():
         btn_process = st.button("⚙️ Procesar", type="primary", use_container_width=True,
                                 disabled=not (f_plantilla and f_nuevas and f_viejas)); _S("post-btn")
 
-        if btn_process:
-            _S("!!! btn_process IS TRUE !!!")
+        if btn_process and f_plantilla and f_nuevas and f_viejas:
             with st.spinner("Procesando..."):
                 try:
                     plantilla_bytes = f_plantilla.read()
@@ -1247,7 +1246,6 @@ def vista_premisas():
                     import traceback; st.text(traceback.format_exc())
 
         if st.session_state.prem_current_week:
-            _S("!!! week IS TRUE !!!")
             st.divider()
             cw = st.session_state.prem_current_week
             wdates = st.session_state.prem_weeks.get(cw,[]) if st.session_state.prem_weeks else []
