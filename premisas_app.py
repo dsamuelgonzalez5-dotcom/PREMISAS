@@ -1123,6 +1123,7 @@ def export_premisas(state):
 # MAIN APP
 # ══════════════════════════════════════════════════════════════════════
 def vista_premisas():
+    import gc; gc.collect()
     import sys as _sys
     def _L(m): print(m, file=_sys.stderr, flush=True)
     _L("1")
@@ -1179,6 +1180,7 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
     # SIDEBAR
     # ══════════════════════════════════════════════════════════════════
     with st.sidebar:
+        import gc as _gc; _gc.collect()
         import sys as _s; _S = lambda m: print(m, file=_s.stderr, flush=True)
         _S("sb")
         st.title("📂 Archivos")
