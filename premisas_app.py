@@ -906,26 +906,27 @@ def detect_proyectos_from_libranzas(df_viejas, df_nuevas, df_proy_existing):
 # ══════════════════════════════════════════════════════════════════════
 # EXPORT
 # ══════════════════════════════════════════════════════════════════════
-HDR_FILL = PatternFill("solid", fgColor="1F3864")
-HDR_FONT = Font(bold=True, color="FFFFFF", size=9)
-TITLE_FONT = Font(bold=True, color="1F3864", size=11)
-DATA_FONT  = Font(size=9)
-THIN  = Side(border_style="thin", color="CCCCCC")
-BORD  = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-WRAP  = Alignment(vertical="top", wrap_text=True)
-CTR   = Alignment(horizontal="center", vertical="center")
 
 def _hdr(ws, headers, row=1):
+    _hf   = PatternFill("solid", fgColor="1F3864")
+    _hfnt = Font(bold=True, color="FFFFFF", size=9)
+    _ctr  = Alignment(horizontal="center", vertical="center")
+    _thin = Side(border_style="thin", color="CCCCCC")
+    _bord = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
     for c, h in enumerate(headers, 1):
         cell = ws.cell(row, c, h)
-        cell.fill = HDR_FILL; cell.font = HDR_FONT
-        cell.alignment = CTR; cell.border = BORD
+        cell.fill = _hf; cell.font = _hfnt
+        cell.alignment = _ctr; cell.border = _bord
 
 def _write(ws, df, start_row=3):
+    _df   = Font(size=9)
+    _thin = Side(border_style="thin", color="CCCCCC")
+    _bord = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
+    _wrap = Alignment(vertical="top", wrap_text=True)
     for ri, (_, r) in enumerate(df.iterrows(), start_row):
         for ci, col in enumerate(df.columns, 1):
             cell = ws.cell(ri, ci, r[col])
-            cell.font = DATA_FONT; cell.border = BORD; cell.alignment = WRAP
+            cell.font = _df; cell.border = _bord; cell.alignment = _wrap
 
 def _clear_rows(ws, min_row):
     """Clear data rows safely, skipping merged cells."""
@@ -939,6 +940,14 @@ def _clear_rows(ws, min_row):
 def export_premisas(state):
     """Generate updated plantilla Excel (without Lineas, Datos, LIBRANZAS NUEVAS/VIEJAS)."""
     import gc
+    HDR_FILL   = PatternFill("solid", fgColor="1F3864")
+    HDR_FONT   = Font(bold=True, color="FFFFFF", size=9)
+    TITLE_FONT = Font(bold=True, color="1F3864", size=11)
+    DATA_FONT  = Font(size=9)
+    THIN  = Side(border_style="thin", color="CCCCCC")
+    BORD  = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    WRAP  = Alignment(vertical="top", wrap_text=True)
+    CTR   = Alignment(horizontal="center", vertical="center")
     # Load workbook — free the bytes reference immediately to reduce peak memory
     _raw_bytes = state["prem_plantilla_bytes"]
     wb_template = load_workbook(BytesIO(_raw_bytes))
