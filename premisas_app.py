@@ -1172,13 +1172,13 @@ def vista_premisas():
         import gc as _gc; _gc.collect()
         import sys as _s; _S = lambda m: print(m, file=_s.stderr, flush=True)
         _S("sb")
-        st.title("📂 Archivos")
-        st.divider()
+        st.title("📂 Archivos"); _S("ti")
+        st.divider(); _S("dv")
 
-        f_plantilla = st.file_uploader("1. Plantilla semana anterior", type="xlsx", key="prem_up_plantilla")
-        f_nuevas    = st.file_uploader("2. libranzas_nuevas.xlsx",     type="xlsx", key="prem_up_nuevas")
-        f_viejas    = st.file_uploader("3. libranzas_viejas.xlsx",     type="xlsx", key="prem_up_viejas")
-        f_indisp    = st.file_uploader("4. Archivo indisponibilidades (opcional)", type="xlsx", key="prem_up_indisp")
+        f_plantilla = st.file_uploader("1. Plantilla semana anterior", type="xlsx", key="prem_up_plantilla"); _S("u1")
+        f_nuevas    = st.file_uploader("2. libranzas_nuevas.xlsx",     type="xlsx", key="prem_up_nuevas"); _S("u2")
+        f_viejas    = st.file_uploader("3. libranzas_viejas.xlsx",     type="xlsx", key="prem_up_viejas"); _S("u3")
+        f_indisp    = st.file_uploader("4. Archivo indisponibilidades (opcional)", type="xlsx", key="prem_up_indisp"); _S("u4")
 
         st.divider()
         btn_process = st.button("⚙️ Procesar", type="primary", use_container_width=True,
