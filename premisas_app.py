@@ -1123,6 +1123,7 @@ def export_premisas(state):
 # MAIN APP
 # ══════════════════════════════════════════════════════════════════════
 def vista_premisas():
+    import sys as _sys; print(".", file=_sys.stderr, flush=True)
     try:
         st.set_page_config(
             page_title="Premisas CND", page_icon="⚡",
@@ -1467,8 +1468,6 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
             st.success("Cambios aplicados"); st.rerun()
 
 
-import sys as _sys
-print("Premisas CND iniciando...", file=_sys.stderr, flush=True)
 try:
     vista_premisas()
 except BaseException as _e:
