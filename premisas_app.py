@@ -1176,17 +1176,19 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
     # SIDEBAR
     # ══════════════════════════════════════════════════════════════════
     with st.sidebar:
-        import sys as _s2; _p = lambda n: print(f">>> SB {n}", file=_s2.stderr, flush=True)
-        _p("A"); st.title("📂 Archivos")
-        _p("B"); st.divider()
-        _p("C"); f_plantilla = st.file_uploader("1. Plantilla semana anterior", type="xlsx", key="prem_up_plantilla")
-        _p("D"); f_nuevas    = st.file_uploader("2. libranzas_nuevas.xlsx",     type="xlsx", key="prem_up_nuevas")
-        _p("E"); f_viejas    = st.file_uploader("3. libranzas_viejas.xlsx",     type="xlsx", key="prem_up_viejas")
-        _p("F"); f_indisp    = st.file_uploader("4. Archivo indisponibilidades (opcional)", type="xlsx", key="prem_up_indisp")
-
+        st.title("📂 Archivos")
         st.divider()
+
+        f_plantilla = st.file_uploader("1. Plantilla semana anterior", type="xlsx", key="prem_up_plantilla")
+        f_nuevas    = st.file_uploader("2. libranzas_nuevas.xlsx",     type="xlsx", key="prem_up_nuevas")
+        f_viejas    = st.file_uploader("3. libranzas_viejas.xlsx",     type="xlsx", key="prem_up_viejas")
+        f_indisp    = st.file_uploader("4. Archivo indisponibilidades (opcional)", type="xlsx", key="prem_up_indisp")
+        import sys as _sx; _px = lambda n: print(f">>> SB2 {n}", file=_sx.stderr, flush=True)
+        _px("G"); st.divider()
+        _px("H")
         btn_process = st.button("⚙️ Procesar", type="primary", use_container_width=True,
                                 disabled=not (f_plantilla and f_nuevas and f_viejas))
+        _px("I")
 
         if btn_process:
             with st.spinner("Procesando..."):
