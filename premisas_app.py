@@ -1123,10 +1123,6 @@ def export_premisas(state):
 # MAIN APP
 # ══════════════════════════════════════════════════════════════════════
 def vista_premisas():
-    import sys as _sys
-    def _chk(n):
-        print(f">>> STEP {n}", file=_sys.stderr, flush=True)
-    _chk(1)
     try:
         st.set_page_config(
             page_title="Premisas CND", page_icon="⚡",
@@ -1134,7 +1130,6 @@ def vista_premisas():
         )
     except Exception:
         pass  # already called by parent app
-    _chk(2)
     st.markdown("""
 <style>
 .week-badge {background:#1F3864;color:white;padding:6px 18px;border-radius:6px;
@@ -1171,26 +1166,23 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
     st.markdown("## ⚡ Módulo de Premisas")
 
     # ── Session state init ────────────────────────────────────────────
-    _chk(5)
     for key in ["plantilla","prem_df_nuevas","prem_df_viejas","prem_df_relevantes",
                 "prem_indisp_data","prem_df_proyectos","prem_current_week","prem_weeks",
                 "prem_lineas_lookup","prem_plantilla_bytes"]:
         if key not in st.session_state:
             st.session_state[key] = None
-    _chk(6)
 
     # ══════════════════════════════════════════════════════════════════
     # SIDEBAR
     # ══════════════════════════════════════════════════════════════════
-    _chk(7)
     with st.sidebar:
-        st.title("📂 Archivos")
-        st.divider()
-
-        f_plantilla = st.file_uploader("1. Plantilla semana anterior", type="xlsx", key="prem_up_plantilla")
-        f_nuevas    = st.file_uploader("2. libranzas_nuevas.xlsx",     type="xlsx", key="prem_up_nuevas")
-        f_viejas    = st.file_uploader("3. libranzas_viejas.xlsx",     type="xlsx", key="prem_up_viejas")
-        f_indisp    = st.file_uploader("4. Archivo indisponibilidades (opcional)", type="xlsx", key="prem_up_indisp")
+        import sys as _s2; _p = lambda n: print(f">>> SB {n}", file=_s2.stderr, flush=True)
+        _p("A"); st.title("📂 Archivos")
+        _p("B"); st.divider()
+        _p("C"); f_plantilla = st.file_uploader("1. Plantilla semana anterior", type="xlsx", key="prem_up_plantilla")
+        _p("D"); f_nuevas    = st.file_uploader("2. libranzas_nuevas.xlsx",     type="xlsx", key="prem_up_nuevas")
+        _p("E"); f_viejas    = st.file_uploader("3. libranzas_viejas.xlsx",     type="xlsx", key="prem_up_viejas")
+        _p("F"); f_indisp    = st.file_uploader("4. Archivo indisponibilidades (opcional)", type="xlsx", key="prem_up_indisp")
 
         st.divider()
         btn_process = st.button("⚙️ Procesar", type="primary", use_container_width=True,
