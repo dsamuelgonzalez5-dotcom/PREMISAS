@@ -1180,9 +1180,11 @@ def vista_premisas():
         f_viejas    = st.file_uploader("3. libranzas_viejas.xlsx",     type="xlsx", key="prem_up_viejas"); _S("u3")
         f_indisp    = st.file_uploader("4. Archivo indisponibilidades (opcional)", type="xlsx", key="prem_up_indisp"); _S("u4")
 
+        _S("pre-div")
         st.divider()
+        _S("pre-btn")
         btn_process = st.button("⚙️ Procesar", type="primary", use_container_width=True,
-                                disabled=not (f_plantilla and f_nuevas and f_viejas))
+                                disabled=not (f_plantilla and f_nuevas and f_viejas)); _S("post-btn")
 
         if btn_process:
             with st.spinner("Procesando..."):
