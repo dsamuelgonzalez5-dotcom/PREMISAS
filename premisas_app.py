@@ -1469,6 +1469,27 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
 
 
 
-st.set_page_config(page_title="Test", page_icon="⚡", layout="wide")
-st.write("## ✅ Constantes y funciones cargaron OK")
-st.write(f"Funciones definidas: vista_premisas, export_premisas, classify_libranza, etc.")
+try:
+    st.set_page_config(page_title="Premisas CND", page_icon="⚡", layout="wide", initial_sidebar_state="expanded")
+except Exception:
+    pass
+
+import sys as _sys
+
+# Write to stderr so it appears in Cloud logs
+print(">>> Iniciando vista_premisas()", file=_sys.stderr, flush=True)
+
+try:
+    vista_premisas()
+except BaseException as _e:
+    import traceback as _tb
+    _msg = f"{type(_e).__name__}: {_e}"
+    _trace = _tb.format_exc()
+    print(f">>> CRASH: {_msg}", file=_sys.stderr, flush=True)
+    print(_trace, file=_sys.stderr, flush=True)
+    # Try to show on screen
+    try:
+        st.error(f"**Error:** {_msg}")
+        st.code(_trace)
+    except Exception as _e2:
+        print(f">>> st.error also failed: {_e2}", file=_sys.stderr, flush=True)
