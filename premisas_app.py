@@ -1183,12 +1183,10 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
         f_nuevas    = st.file_uploader("2. libranzas_nuevas.xlsx",     type="xlsx", key="prem_up_nuevas")
         f_viejas    = st.file_uploader("3. libranzas_viejas.xlsx",     type="xlsx", key="prem_up_viejas")
         f_indisp    = st.file_uploader("4. Archivo indisponibilidades (opcional)", type="xlsx", key="prem_up_indisp")
-        import sys as _sx; _px = lambda n: print(f">>> SB2 {n}", file=_sx.stderr, flush=True)
-        _px("G"); st.divider()
-        _px("H")
+
+        st.divider()
         btn_process = st.button("⚙️ Procesar", type="primary", use_container_width=True,
                                 disabled=not (f_plantilla and f_nuevas and f_viejas))
-        _px("I")
 
         if btn_process:
             with st.spinner("Procesando..."):
@@ -1287,8 +1285,12 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
     # ══════════════════════════════════════════════════════════════════
     # MAIN CONTENT
     # ══════════════════════════════════════════════════════════════════
+    import sys as _sm; _pm = lambda n: print(f">>> MAIN {n}", file=_sm.stderr, flush=True)
+    _pm("A")
     if st.session_state.prem_df_nuevas is None:
+        _pm("B - mostrando info")
         st.info("👈 Cargue los archivos en el panel lateral y presione **Procesar** para comenzar.")
+        _pm("C - retornando")
         return
 
     cw      = st.session_state.prem_current_week
@@ -1475,6 +1477,7 @@ import sys as _sys
 print(">>> Llamando vista_premisas()", file=_sys.stderr, flush=True)
 try:
     vista_premisas()
+    print(">>> vista_premisas() completó OK", file=_sys.stderr, flush=True)
 except BaseException as _e:
     import traceback as _tb
     print(f">>> CRASH: {type(_e).__name__}: {_e}", file=_sys.stderr, flush=True)
