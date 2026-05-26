@@ -11,9 +11,8 @@ import re
 import copy
 import traceback
 import sys
-import gc
 
-_PAGE_CSS = """
+st.markdown("""
 <style>
 .week-badge {background:#1F3864;color:white;padding:6px 18px;border-radius:6px;
              font-size:1.2rem;font-weight:bold;display:inline-block;}
@@ -21,19 +20,31 @@ _PAGE_CSS = """
 .tag-r  {background:#d4edda;color:#155724;padding:1px 6px;border-radius:3px;font-size:.8rem;font-weight:bold;}
 .tag-i  {background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px;font-size:.8rem;font-weight:bold;}
 .tag-ri {background:#cce5ff;color:#004085;padding:1px 6px;border-radius:3px;font-size:.8rem;font-weight:bold;}
+
+/* Data editor: better contrast and auto row height */
 div[data-testid="stDataFrame"] .ag-cell {
-    color: #ffffff !important; font-weight: 500 !important;
-    white-space: normal !important; line-height: 1.4 !important;
-    padding-top: 6px !important; padding-bottom: 6px !important;
+    color: #ffffff !important;
+    font-weight: 500 !important;
+    white-space: normal !important;
+    line-height: 1.4 !important;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
 }
 div[data-testid="stDataFrame"] .ag-cell-value {
-    white-space: normal !important; overflow: visible !important; word-break: break-word !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    word-break: break-word !important;
 }
-div[data-testid="stDataFrame"] .ag-row { height: auto !important; min-height: 42px !important; }
-div[data-testid="stDataFrame"] .ag-header-cell-label { font-weight: 700 !important; color: #ffffff !important; }
+div[data-testid="stDataFrame"] .ag-row {
+    height: auto !important;
+    min-height: 42px !important;
+}
+div[data-testid="stDataFrame"] .ag-header-cell-label {
+    font-weight: 700 !important;
+    color: #ffffff !important;
+}
 </style>
-"""
-
+""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════
 # CONSTANTS
@@ -712,7 +723,7 @@ def process_viejas(df_raw):
         })
     return pd.DataFrame(out_rows)
 
-def build_relevantes(df_nuevas, df_viejas, lineas_lookup, relevantes_anteriores=None, week_start=None, lineas_codes=None):
+def build_relevantes(df_nuevas, df_viejas, lineas_lookup, relevantes_anteriores=None, week_start=None):
     """Build relevantes from R-libranzas in nuevas + viejas + previous plantilla, sorted by Fecha Inicio."""
     rows = []
     seen_libranzas = set()  # track by Libranza number to avoid duplicates
@@ -720,7 +731,7 @@ def build_relevantes(df_nuevas, df_viejas, lineas_lookup, relevantes_anteriores=
     def add_relevantes_from(df, classify=False):
         if df is None or df.empty: return
         for _, row in df.iterrows():
-            ri = row.get("R/I","") if not classify else classify_libranza(row, lineas_codes)
+            ri = row.get("R/I","") if not classify else classify_libranza(row)
             if "R" not in str(ri): continue
             eq_up = str(row.get("Equipos","") or "").upper()
             if "GENERADOR AUXILIAR" in eq_up and not any(
@@ -902,31 +913,55 @@ def detect_proyectos_from_libranzas(df_viejas, df_nuevas, df_proy_existing):
     if not new_rows: return df_proy_existing
     df_new = pd.DataFrame(new_rows)
     return pd.concat([df_proy_existing, df_new], ignore_index=True)
+    """Update Sem Disp (from fecha_fin lookup) and Sem Prueba (replace week number)."""
+    if df_proy.empty: return df_proy
+    df = df_proy.copy()
+    prev_week = current_week - 1
+
+    for idx, row in df.iterrows():
+        # ── Sem Disp: look up fecha_fin in calendar ──────────────────
+        raw = row.get("_fecha_fin_raw")
+        fecha_str = row.get("Fecha finaliza libranza","")
+        dt = parse_dt(raw) if (raw is not None and str(raw) not in ["None","nan",""]) \
+             else parse_dt(fecha_str)
+        if dt is not None:
+            wn = find_week_for_date(dt, weeks)
+            if wn is not None:
+                df.at[idx,"Sem Disp"] = f"Semana {wn}"
+
+        # ── Sem Prueba: replace previous week number with current ─────
+        sem_p = str(row.get("Sem Prueba","") or "")
+        if sem_p and str(prev_week) in sem_p:
+            df.at[idx,"Sem Prueba"] = re.sub(
+                rf'\bSemana\s+{prev_week}\b',
+                f'Semana {current_week}',
+                sem_p
+            )
+    return df
 
 # ══════════════════════════════════════════════════════════════════════
 # EXPORT
 # ══════════════════════════════════════════════════════════════════════
+HDR_FILL = PatternFill("solid", fgColor="1F3864")
+HDR_FONT = Font(bold=True, color="FFFFFF", size=9)
+TITLE_FONT = Font(bold=True, color="1F3864", size=11)
+DATA_FONT  = Font(size=9)
+THIN  = Side(border_style="thin", color="CCCCCC")
+BORD  = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+WRAP  = Alignment(vertical="top", wrap_text=True)
+CTR   = Alignment(horizontal="center", vertical="center")
 
 def _hdr(ws, headers, row=1):
-    _hf   = PatternFill("solid", fgColor="1F3864")
-    _hfnt = Font(bold=True, color="FFFFFF", size=9)
-    _ctr  = Alignment(horizontal="center", vertical="center")
-    _thin = Side(border_style="thin", color="CCCCCC")
-    _bord = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
     for c, h in enumerate(headers, 1):
         cell = ws.cell(row, c, h)
-        cell.fill = _hf; cell.font = _hfnt
-        cell.alignment = _ctr; cell.border = _bord
+        cell.fill = HDR_FILL; cell.font = HDR_FONT
+        cell.alignment = CTR; cell.border = BORD
 
 def _write(ws, df, start_row=3):
-    _df   = Font(size=9)
-    _thin = Side(border_style="thin", color="CCCCCC")
-    _bord = Border(left=_thin, right=_thin, top=_thin, bottom=_thin)
-    _wrap = Alignment(vertical="top", wrap_text=True)
     for ri, (_, r) in enumerate(df.iterrows(), start_row):
         for ci, col in enumerate(df.columns, 1):
             cell = ws.cell(ri, ci, r[col])
-            cell.font = _df; cell.border = _bord; cell.alignment = _wrap
+            cell.font = DATA_FONT; cell.border = BORD; cell.alignment = WRAP
 
 def _clear_rows(ws, min_row):
     """Clear data rows safely, skipping merged cells."""
@@ -939,20 +974,7 @@ def _clear_rows(ws, min_row):
 
 def export_premisas(state):
     """Generate updated plantilla Excel (without Lineas, Datos, LIBRANZAS NUEVAS/VIEJAS)."""
-    import gc
-    HDR_FILL   = PatternFill("solid", fgColor="1F3864")
-    HDR_FONT   = Font(bold=True, color="FFFFFF", size=9)
-    TITLE_FONT = Font(bold=True, color="1F3864", size=11)
-    DATA_FONT  = Font(size=9)
-    THIN  = Side(border_style="thin", color="CCCCCC")
-    BORD  = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-    WRAP  = Alignment(vertical="top", wrap_text=True)
-    CTR   = Alignment(horizontal="center", vertical="center")
-    # Load workbook — free the bytes reference immediately to reduce peak memory
-    _raw_bytes = state["prem_plantilla_bytes"]
-    wb_template = load_workbook(BytesIO(_raw_bytes))
-    del _raw_bytes
-    gc.collect()
+    wb_template = load_workbook(BytesIO(state["prem_plantilla_bytes"]))
 
     # ── Remove unwanted sheets ────────────────────────────────────────
     for sheet_name in ["Lineas", "Datos", "LIBRANZAS NUEVAS", "LIBRANZAS VIEJAS"]:
@@ -1134,14 +1156,6 @@ def export_premisas(state):
 # MAIN APP
 # ══════════════════════════════════════════════════════════════════════
 def vista_premisas():
-    try:
-        st.set_page_config(
-            page_title="Premisas CND", page_icon="⚡",
-            layout="wide", initial_sidebar_state="expanded"
-        )
-    except Exception:
-        pass
-    st.markdown(_PAGE_CSS, unsafe_allow_html=True)
     st.markdown("## ⚡ Módulo de Premisas")
 
     # ── Session state init ────────────────────────────────────────────
@@ -1195,7 +1209,7 @@ def vista_premisas():
                     df_nuevas    = process_nuevas(df_src_nuevas, lineas_codes, unit_mw, plant_prefix)
                     df_viejas    = process_viejas(df_src_viejas)
                     df_relevantes= build_relevantes(df_nuevas, df_viejas, lineas,
-                                                    rel_ant, week_start, lineas_codes)
+                                                    rel_ant, week_start)
                     indisp_data  = build_indisponibilidades(
                                         indisp_exist, df_viejas, df_nuevas,
                                         unit_mw, plant_prefix, weeks, current_week,
@@ -1219,8 +1233,6 @@ def vista_premisas():
                         "prem_procesado":       True,
                         "prem_relevantes_anteriores": rel_ant,
                         "prem_week_start":      week_start,
-                        "prem_indisp_existing": indisp_exist,
-                        "prem_indisp_file_df":  indisp_file_df,
                     })
                     st.success(f"✅ Semana {current_week} procesada")
                     st.rerun()
@@ -1244,23 +1256,16 @@ def vista_premisas():
             if st.session_state.prem_df_nuevas is not None:
                 if st.button("📦 Preparar exportación", use_container_width=True):
                     with st.spinner("Generando archivo..."):
-                        try:
-                            gc.collect()
-                            st.session_state.prem_export_bytes = export_premisas({
-                                "prem_plantilla_bytes": st.session_state.prem_plantilla_bytes,
-                                "prem_current_week":    st.session_state.prem_current_week,
-                                "prem_weeks":           st.session_state.prem_weeks,
-                                "prem_df_nuevas":       st.session_state.prem_df_nuevas,
-                                "prem_df_viejas":       st.session_state.prem_df_viejas,
-                                "prem_df_relevantes":   st.session_state.prem_df_relevantes,
-                                "prem_indisp_data":     st.session_state.prem_indisp_data,
-                                "prem_df_proyectos":    st.session_state.prem_df_proyectos,
-                            })
-                            gc.collect()
-                            st.success("✅ Archivo listo para descargar")
-                        except BaseException as _exp:
-                            st.error(f"❌ Error al generar el archivo: {type(_exp).__name__}: {_exp}")
-                            st.code(traceback.format_exc())
+                        st.session_state.prem_export_bytes = export_premisas({
+                            "prem_plantilla_bytes": st.session_state.prem_plantilla_bytes,
+                            "prem_current_week":    st.session_state.prem_current_week,
+                            "prem_weeks":           st.session_state.prem_weeks,
+                            "prem_df_nuevas":       st.session_state.prem_df_nuevas,
+                            "prem_df_viejas":       st.session_state.prem_df_viejas,
+                            "prem_df_relevantes":   st.session_state.prem_df_relevantes,
+                            "prem_indisp_data":   st.session_state.prem_indisp_data,
+                            "prem_df_proyectos":    st.session_state.prem_df_proyectos,
+                        })
                 if st.session_state.get("prem_export_bytes"):
                     st.download_button(
                         "📥 Descargar plantilla",
@@ -1335,14 +1340,12 @@ def vista_premisas():
             st.session_state.prem_df_relevantes = build_relevantes(
                 full, st.session_state.prem_df_viejas, st.session_state.prem_lineas_lookup,
                 st.session_state.get("prem_relevantes_anteriores",[]),
-                st.session_state.get("prem_week_start"),
-                st.session_state.get("prem_lineas_codes"))
+                st.session_state.get("prem_week_start"))
             st.session_state.prem_indisp_data = build_indisponibilidades(
-                st.session_state.get("prem_indisp_existing", []),
+                st.session_state.get("prem_indisp_data", pd.DataFrame())._prev if False else [],
                 st.session_state.prem_df_viejas, full,
                 st.session_state.get("prem_unit_mw",{}),
-                st.session_state.get("prem_plant_prefix",{}), weeks, cw,
-                indisp_file_df=st.session_state.get("prem_indisp_file_df"))
+                st.session_state.get("prem_plant_prefix",{}), weeks, cw)
             st.success("Cambios aplicados")
             st.rerun()
 
@@ -1458,11 +1461,18 @@ def vista_premisas():
 
 
 
-if __name__ == "__main__":
-    try:
-        vista_premisas()
-    except BaseException as _e:
-        st.error(f"**Error al iniciar la app:** {type(_e).__name__}: {_e}")
-        st.code(traceback.format_exc())
+try:
+    st.set_page_config(
+        page_title="Premisas CND", page_icon="⚡",
+        layout="wide", initial_sidebar_state="expanded"
+    )
+except Exception:
+    pass
+
+try:
+    vista_premisas()
+except BaseException as _e:
+    st.error(f"**Error:** {type(_e).__name__}: {_e}")
+    st.code(traceback.format_exc())
 
 
