@@ -1467,7 +1467,6 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
             st.success("Cambios aplicados"); st.rerun()
 
 
-
 try:
     vista_premisas()
 except BaseException as _e:
