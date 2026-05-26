@@ -1123,7 +1123,9 @@ def export_premisas(state):
 # MAIN APP
 # ══════════════════════════════════════════════════════════════════════
 def vista_premisas():
-    import sys as _sys; print(".", file=_sys.stderr, flush=True)
+    import sys as _sys
+    def _log(m): print(m, file=_sys.stderr, flush=True)
+    _log("ok")
     try:
         st.set_page_config(
             page_title="Premisas CND", page_icon="⚡",
@@ -1466,6 +1468,7 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
         if st.button("💾 Aplicar cambios", key="prem_apply_proy"):
             st.session_state.prem_df_proyectos = edited_p.iloc[edited_p.index.tolist()].reset_index(drop=True)
             st.success("Cambios aplicados"); st.rerun()
+
 
 
 try:
