@@ -1288,11 +1288,12 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
+        import sys as _send; print("sb-end", file=_send.stderr, flush=True)
 
     # ══════════════════════════════════════════════════════════════════
     # MAIN CONTENT
     # ══════════════════════════════════════════════════════════════════
-    import sys as _sm; print("main", file=_sm.stderr, flush=True)
+    import sys as _sm; print("sb-exit-done", file=_sm.stderr, flush=True)
     if st.session_state.prem_df_nuevas is None:
         st.info("👈 Cargue los archivos en el panel lateral y presione **Procesar** para comenzar.")
         return
