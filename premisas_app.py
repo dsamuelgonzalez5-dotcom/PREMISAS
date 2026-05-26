@@ -1285,12 +1285,8 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
     # ══════════════════════════════════════════════════════════════════
     # MAIN CONTENT
     # ══════════════════════════════════════════════════════════════════
-    import sys as _sm; _pm = lambda n: print(f">>> MAIN {n}", file=_sm.stderr, flush=True)
-    _pm("A")
     if st.session_state.prem_df_nuevas is None:
-        _pm("B - mostrando info")
         st.info("👈 Cargue los archivos en el panel lateral y presione **Procesar** para comenzar.")
-        _pm("C - retornando")
         return
 
     cw      = st.session_state.prem_current_week
@@ -1472,17 +1468,8 @@ div[data-testid="stDataFrame"] .ag-header-cell-label {
 
 
 
-
-import sys as _sys
-print(">>> Llamando vista_premisas()", file=_sys.stderr, flush=True)
 try:
     vista_premisas()
-    print(">>> vista_premisas() completó OK", file=_sys.stderr, flush=True)
 except BaseException as _e:
-    import traceback as _tb
-    print(f">>> CRASH: {type(_e).__name__}: {_e}", file=_sys.stderr, flush=True)
-    print(_tb.format_exc(), file=_sys.stderr, flush=True)
-    try:
-        st.error(f"**Error:** {type(_e).__name__}: {_e}")
-        st.code(_tb.format_exc())
-    except: pass
+    st.error(f"**Error:** {type(_e).__name__}: {_e}")
+    st.code(traceback.format_exc())
