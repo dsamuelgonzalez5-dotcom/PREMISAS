@@ -1240,6 +1240,132 @@ def export_premisas(state):
 # ══════════════════════════════════════════════════════════════════════
 # MAIN APP
 # ══════════════════════════════════════════════════════════════════════
+TEMP_EXPORT = "/tmp/premisas_export.xlsx"
+
+def export_init(plantilla_bytes):
+    import gc, os; gc.collect()
+    wb = load_workbook(BytesIO(plantilla_bytes), keep_links=False)
+    for s in ["Lineas","Datos","LIBRANZAS NUEVAS","LIBRANZAS VIEJAS"]:
+        if s in wb.sheetnames: del wb[s]
+    wb.save(TEMP_EXPORT); wb.close(); del wb; gc.collect()
+
+def export_write_indisp(indisp_data, weeks, current_week):
+    import gc; gc.collect()
+    WHITE_FILL = PatternFill("solid", fgColor="FFFFFF")
+    BLUE_FILL  = PatternFill("solid", fgColor="BDD7EE")
+    TOTAL_FONT = Font(bold=True, size=9)
+    NO_BORDER  = Border()
+    DATA_BORD  = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    wb = load_workbook(TEMP_EXPORT, keep_links=False)
+    ws = wb["Indisponibilidades"]
+    for merge in list(ws.merged_cells.ranges): ws.unmerge_cells(str(merge))
+    try: ws.cell(1,1).value = f"Indisponibilidades de Generación Intersemanales - Semana {current_week}"
+    except: pass
+    try: ws.cell(2,1).value = f"Semana {current_week}"
+    except: pass
+    _clear_rows(ws, 3)
+    week_dates = weeks.get(current_week, [None]*7)
+    sab = week_dates[0]
+    fixed_dates = []
+    for i, d in enumerate(week_dates):
+        if d is None: fixed_dates.append(None)
+        elif sab and abs((d-sab).days)>7: fixed_dates.append(sab + timedelta(days=i))
+        else: fixed_dates.append(d)
+    ri = 3; weekly_total = 0.0
+    for i, dia in enumerate(DIAS_SEMANA):
+        dt = fixed_dates[i] if i < len(fixed_dates) else None
+        if dt is None: continue
+        day_date = dt.date()
+        day_rows = []
+        if indisp_data is not None and not (hasattr(indisp_data,"empty") and indisp_data.empty):
+            for _, row_data in indisp_data.iterrows():
+                fi = parse_dt(row_data.get("Fecha inicio",""))
+                ff = parse_dt(row_data.get("Fecha final",""))
+                if fi and ff and fi.date() <= day_date <= ff.date():
+                    day_rows.append(row_data)
+        if not day_rows: continue
+        day_rows = sorted(day_rows, key=lambda r: (0 if str(r.get("status",""))=="vieja" else 1, parse_dt(r.get("Fecha inicio","")) or datetime.max))
+        day_start_ri = ri; day_total = 0.0
+        for row_data in day_rows:
+            is_vieja = str(row_data.get("status",""))=="vieja"
+            for ci, col in enumerate(INDISP_COLS, 2):
+                val = row_data.get(col,"") if hasattr(row_data,"get") else ""
+                try:
+                    cell = ws.cell(ri, ci, val); cell.font=DATA_FONT; cell.border=DATA_BORD; cell.fill=WHITE_FILL
+                    if is_vieja and ci==8: cell.fill=BLUE_FILL; cell.font=Font(size=9,bold=True)
+                except: pass
+            mw = float(row_data.get("Potencia (MW)",0) or 0) if hasattr(row_data,"get") else 0
+            day_total+=mw; weekly_total+=mw; ri+=1
+        day_end_ri = ri-1
+        try:
+            if day_end_ri>day_start_ri: ws.merge_cells(f"A{day_start_ri}:A{day_end_ri}")
+            ca=ws.cell(day_start_ri,1); ca.value=f"{dia.lower()} {day_date.day}"
+            ca.font=Font(size=9,bold=True); ca.alignment=Alignment(vertical="center",horizontal="center",wrap_text=True)
+            ca.border=DATA_BORD; ca.fill=WHITE_FILL
+        except: pass
+        try:
+            ws.merge_cells(f"B{ri}:F{ri}")
+            cl=ws.cell(ri,2); cl.value="INDISPONIBILIDAD TOTAL EN HORAS PUNTA (MW):"; cl.font=TOTAL_FONT; cl.fill=WHITE_FILL; cl.border=NO_BORDER
+            cm=ws.cell(ri,7); cm.value=round(day_total,4); cm.font=TOTAL_FONT; cm.fill=WHITE_FILL; cm.border=NO_BORDER
+            for ci in [1,3,4,5,6,8,9]:
+                try: c=ws.cell(ri,ci); c.value=None; c.fill=WHITE_FILL; c.border=NO_BORDER
+                except: pass
+        except: pass
+        ri+=2
+    try:
+        ws.merge_cells(f"B{ri}:F{ri}")
+        cl=ws.cell(ri,2); cl.value="INDISPONIBILIDAD TOTAL EN HORAS PUNTA (MW):"; cl.font=Font(bold=True,size=9,color="FF0000"); cl.fill=WHITE_FILL; cl.border=Border()
+        cm=ws.cell(ri,7); cm.value=round(weekly_total,4); cm.font=Font(bold=True,size=9,color="FF0000"); cm.fill=WHITE_FILL; cm.border=Border()
+    except: pass
+    for row in ws.iter_rows(min_row=ri+1, max_row=min(ri+200, ws.max_row)):
+        for cell in row:
+            try: cell.value=None; cell.fill=WHITE_FILL; cell.border=NO_BORDER
+            except: pass
+    wb.save(TEMP_EXPORT); wb.close(); del wb; gc.collect()
+
+def export_write_relevantes(df_relevantes):
+    import gc; gc.collect()
+    wb = load_workbook(TEMP_EXPORT, keep_links=False)
+    ws = wb["Libranzas Relevantes"]
+    for merge in list(ws.merged_cells.ranges): ws.unmerge_cells(str(merge))
+    _clear_rows(ws, 3); _hdr(ws, PLANTILLA_REL_COLS, row=2)
+    if df_relevantes is not None and not df_relevantes.empty:
+        BLUE_FILL_R=PatternFill("solid",fgColor="BDD7EE"); GREEN_FILL=PatternFill("solid",fgColor="C6EFCE")
+        PINK_FILL=PatternFill("solid",fgColor="FFB6C1"); WHITE_FILL_R=PatternFill("solid",fgColor="FFFFFF")
+        for ri,(_, r) in enumerate(df_relevantes.iterrows(), 3):
+            is_vieja=str(r.get("_status",""))=="vieja" if "_status" in r.index else False
+            tipo_val=str(r.get("Tipo","")).strip().lower()
+            for ci, col in enumerate(PLANTILLA_REL_COLS, 1):
+                val=r.get(col,"") if col in r.index else ""
+                try:
+                    cell=ws.cell(ri,ci,val); cell.font=DATA_FONT; cell.border=BORD; cell.alignment=WRAP; cell.fill=WHITE_FILL_R
+                    if ci==1: cell.fill=GREEN_FILL if "continua" in tipo_val else (PINK_FILL if "repetitiva" in tipo_val else WHITE_FILL_R)
+                    elif ci==9 and is_vieja: cell.fill=BLUE_FILL_R; cell.font=Font(size=9,bold=True)
+                except: pass
+    wb.save(TEMP_EXPORT); wb.close(); del wb; gc.collect()
+
+def export_write_proyectos(df_proyectos):
+    import gc; gc.collect()
+    wb = load_workbook(TEMP_EXPORT, keep_links=False)
+    ws = wb["Proyectos de Generacion"]
+    for merge in list(ws.merged_cells.ranges): ws.unmerge_cells(str(merge))
+    start_row = 14
+    for i, row in enumerate(ws.iter_rows(min_row=13, max_row=20, values_only=True), 13):
+        if row[0]=="Planta": start_row=i+1; break
+    _clear_rows(ws, start_row)
+    if df_proyectos is not None and not df_proyectos.empty:
+        for ri2,(_, r) in enumerate(df_proyectos.iterrows(), start_row):
+            for ci, col in enumerate(PROY_COLS, 1):
+                try: ws.cell(ri2, ci, r.get(col,"")).font=DATA_FONT
+                except: pass
+    wb.save(TEMP_EXPORT); wb.close(); del wb; gc.collect()
+
+def export_get_bytes():
+    import os
+    if not os.path.exists(TEMP_EXPORT): return None
+    with open(TEMP_EXPORT,"rb") as f: return f.read()
+
+
 def vista_premisas():
     st.markdown("## ⚡ Módulo de Premisas")
 
@@ -1423,38 +1549,62 @@ def vista_premisas():
             c1.metric("Nuevas", len(df_n) if df_n is not None else 0)
             c2.metric("Viejas", len(df_v) if df_v is not None else 0)
 
-        # ── Exportar ──────────────────────────────────────────────────
+        # ── Exportación por pasos ─────────────────────────────────────
         st.divider()
-        can_export = (st.session_state.prem_df_relevantes is not None or
-                      st.session_state.prem_df_nuevas is not None)
-        if st.button("📦 Preparar exportación", use_container_width=True,
-                     disabled=not can_export, key="prem_btn_export"):
-            with st.spinner("Generando archivo..."):
-                try:
-                    st.session_state.prem_export_bytes = export_premisas({
-                        "prem_plantilla_bytes": st.session_state.prem_plantilla_bytes,
-                        "prem_current_week":    st.session_state.prem_current_week,
-                        "prem_weeks":           st.session_state.prem_weeks,
-                        "prem_df_nuevas":       st.session_state.prem_df_nuevas,
-                        "prem_df_viejas":       st.session_state.prem_df_viejas,
-                        "prem_df_relevantes":   st.session_state.prem_df_relevantes,
-                        "prem_indisp_data":     st.session_state.prem_indisp_data,
-                        "prem_df_proyectos":    st.session_state.prem_df_proyectos,
-                    })
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error exportando: {e}")
-                    import traceback; st.text(traceback.format_exc())
+        st.markdown("**Exportación**")
+        can_init = st.session_state.prem_plantilla_bytes is not None
 
-        if st.session_state.get("prem_export_bytes"):
+        if st.button("📂 1. Inicializar exportación", use_container_width=True,
+                     disabled=not can_init, key="prem_exp_init"):
+            with st.spinner("Inicializando..."):
+                try:
+                    export_init(st.session_state.prem_plantilla_bytes)
+                    st.session_state.prem_exp_step = 1
+                    st.success("✅ Listo"); st.rerun()
+                except Exception as e: st.error(str(e))
+
+        exp_step = st.session_state.get("prem_exp_step", 0)
+
+        if st.button("⚠️ 2. Escribir Indisponibilidades", use_container_width=True,
+                     disabled=(exp_step < 1), key="prem_exp_indisp"):
+            with st.spinner("Escribiendo indisponibilidades..."):
+                try:
+                    export_write_indisp(st.session_state.prem_indisp_data,
+                                        st.session_state.prem_weeks,
+                                        st.session_state.prem_current_week)
+                    st.session_state.prem_exp_step = max(exp_step, 2)
+                    st.success("✅ Listo"); st.rerun()
+                except Exception as e: st.error(str(e))
+
+        if st.button("🔑 3. Escribir Relevantes", use_container_width=True,
+                     disabled=(exp_step < 1), key="prem_exp_rel"):
+            with st.spinner("Escribiendo relevantes..."):
+                try:
+                    export_write_relevantes(st.session_state.prem_df_relevantes)
+                    st.session_state.prem_exp_step = max(exp_step, 3)
+                    st.success("✅ Listo"); st.rerun()
+                except Exception as e: st.error(str(e))
+
+        if st.button("🏗️ 4. Escribir Proyectos", use_container_width=True,
+                     disabled=(exp_step < 1), key="prem_exp_proy"):
+            with st.spinner("Escribiendo proyectos..."):
+                try:
+                    export_write_proyectos(st.session_state.prem_df_proyectos)
+                    st.session_state.prem_exp_step = max(exp_step, 4)
+                    st.success("✅ Listo"); st.rerun()
+                except Exception as e: st.error(str(e))
+
+        if exp_step >= 1:
             cw = st.session_state.prem_current_week or 0
-            st.download_button(
-                "📥 Descargar plantilla",
-                data=st.session_state.prem_export_bytes,
-                file_name=f"Premisas_SEM_{cw:02d}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
+            data = export_get_bytes()
+            if data:
+                st.download_button(
+                    "📥 Descargar plantilla",
+                    data=data,
+                    file_name=f"Premisas_SEM_{cw:02d}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
 
     # ══════════════════════════════════════════════════════════════════
     # MAIN CONTENT
