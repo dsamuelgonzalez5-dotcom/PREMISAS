@@ -1553,5 +1553,11 @@ try:
         layout="wide", initial_sidebar_state="expanded"
     )
 except Exception:
-    pass  # already set by parent app when imported
-vista_premisas()
+    pass
+
+try:
+    vista_premisas()
+except Exception as _e:
+    import traceback as _tb
+    st.error(f"Error al iniciar: {_e}")
+    st.code(_tb.format_exc())
