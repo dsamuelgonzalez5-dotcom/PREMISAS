@@ -9,11 +9,8 @@ from openpyxl.utils import get_column_letter
 from io import BytesIO
 import re
 import copy
-import traceback
-import sys
 
-import gc
-_PAGE_CSS = """
+st.markdown("""
 <style>
 .week-badge {background:#1F3864;color:white;padding:6px 18px;border-radius:6px;
              font-size:1.2rem;font-weight:bold;display:inline-block;}
@@ -21,18 +18,31 @@ _PAGE_CSS = """
 .tag-r  {background:#d4edda;color:#155724;padding:1px 6px;border-radius:3px;font-size:.8rem;font-weight:bold;}
 .tag-i  {background:#fff3cd;color:#856404;padding:1px 6px;border-radius:3px;font-size:.8rem;font-weight:bold;}
 .tag-ri {background:#cce5ff;color:#004085;padding:1px 6px;border-radius:3px;font-size:.8rem;font-weight:bold;}
+
+/* Data editor: better contrast and auto row height */
 div[data-testid="stDataFrame"] .ag-cell {
-    color: #ffffff !important; font-weight: 500 !important;
-    white-space: normal !important; line-height: 1.4 !important;
-    padding-top: 6px !important; padding-bottom: 6px !important;
+    color: #ffffff !important;
+    font-weight: 500 !important;
+    white-space: normal !important;
+    line-height: 1.4 !important;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
 }
 div[data-testid="stDataFrame"] .ag-cell-value {
-    white-space: normal !important; overflow: visible !important; word-break: break-word !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    word-break: break-word !important;
 }
-div[data-testid="stDataFrame"] .ag-row { height: auto !important; min-height: 42px !important; }
-div[data-testid="stDataFrame"] .ag-header-cell-label { font-weight: 700 !important; color: #ffffff !important; }
+div[data-testid="stDataFrame"] .ag-row {
+    height: auto !important;
+    min-height: 42px !important;
+}
+div[data-testid="stDataFrame"] .ag-header-cell-label {
+    font-weight: 700 !important;
+    color: #ffffff !important;
+}
 </style>
-"""
+""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════
 # CONSTANTS
@@ -244,7 +254,9 @@ def classify_libranza(row, lineas_codes=None, unit_mw=None, plant_prefix=None):
     is_i   = False
     is_r   = False
 
-    # ── Exclude distribution agents with CIRCUITO ──────────────
+    # ── Exclude "libranza informativa" → never R ───────────────
+    if "libranza informativa" in desc or "lib. informativa" in desc:
+        is_r = False
     is_distrib = any(numero.startswith(a) for a in DISTRIBUTION_AGENTS)
     if is_distrib and any(k in desc or k in eq_up.lower() for k in DISTRIBUTION_KW):
         return ""
@@ -341,41 +353,46 @@ def parse_equipo_entries(equipos_str):
     return results
 
 def get_relevante_equipo_info(row, lineas_lookup):
-    """Extract Tipo de Equipos, Equipo, Subestación for relevantes table."""
+    """Extract Tipo de Equipos, ALL Equipos, Subestación for relevantes table."""
     entries = parse_equipo_entries(row.get("Equipos",""))
     R_PRIORITY = ["LINEA DE CONEXION","AUTOTRANSFORMADOR","TRANSFORMADOR DE POTENCIA",
                   "BANCO DE CAPACITORES","BARRA","PORTICO","PÓRTICO","INTERRUPTOR"]
-    chosen = None
+
+    # Collect ALL R-type entries
+    r_entries = []
     for priority in R_PRIORITY:
         for e in entries:
-            if priority in e["raw_tipo"]:
-                chosen = e
-                break
-        if chosen: break
-    if not chosen and entries:
-        chosen = entries[0]
-    if not chosen:
+            if priority in e["raw_tipo"] and e not in r_entries:
+                r_entries.append(e)
+    if not r_entries and entries:
+        r_entries = entries[:1]
+    if not r_entries:
         return {"tipo":"—","equipo":"—","sust":"—"}
 
-    # Clean equipo id
-    equipo_id = re.sub(r'\(RTR\)', '', chosen["ids"]).strip()
+    # Tipo: from first R entry
+    tipo = r_entries[0]["tipo"]
 
-    # Subestación
+    # All equipo IDs combined
+    all_ids = "  ".join(
+        re.sub(r'\(RTR\)', '', e["ids"]).strip()
+        for e in r_entries
+    ).strip()
+
+    # Subestación: from first line entry lookup, else location
     sust = ""
-    if "LINEA DE CONEXION" in chosen["raw_tipo"]:
-        # Try each ID token against lineas_lookup
-        for token in equipo_id.split():
-            token = token.strip()
-            if token in lineas_lookup:
-                sust = lineas_lookup[token]
-                break
+    for e in r_entries:
+        if "LINEA DE CONEXION" in e["raw_tipo"]:
+            for token in re.sub(r'\(RTR\)', '', e["ids"]).split():
+                if token.strip() in lineas_lookup:
+                    sust = lineas_lookup[token.strip()]
+                    break
+        if sust: break
     if not sust:
-        loc = chosen["location"]
+        loc = r_entries[0]["location"]
         loc = re.sub(r'^(SE|LIN|PLANTA)\s+', '', loc, flags=re.I).strip()
-        # Title case but preserve accents
         sust = loc.title()
 
-    return {"tipo": chosen["tipo"], "equipo": equipo_id, "sust": sust}
+    return {"tipo": tipo, "equipo": all_ids, "sust": sust}
 
 def get_unit_from_equipos(equipos_str):
     """Extract generation unit description for indisponibilidades."""
@@ -566,6 +583,7 @@ def load_source_libranzas(file_bytes):
             "Descripción":       g("Descripción"),
             "Observaciones":     g("Observaciones"),
             "Equipos":           g("Equipos"),
+            "Libranzas Vinculadas": g("Libranzas Vinculadas"),
             "Responsable de Campo": g("Responsable de Campo"),
             "Cargo Responsable Campo": g("Cargo Responsable Campo"),
             "Fecha Aprobación":  g("Fecha Aprobación"),
@@ -676,20 +694,21 @@ def process_nuevas(df_raw, lineas_codes=None, unit_mw=None, plant_prefix=None):
             "Descripción":         row["Descripción"],
             "Observaciones":       row["Observaciones"],
             "Equipos":             row["Equipos"],
-            "Libranzas Vinculadas": "",
+            "Libranzas Vinculadas": row.get("Libranzas Vinculadas",""),
             "Fecha Aprobación":    row["Fecha Aprobación"],
             "Último Estado":       row["Último Estado"],
             "R/I":                 ri,
         })
     return pd.DataFrame(out_rows)
 
-def process_viejas(df_raw):
-    """Filter libranzas viejas: keep only Aprobado and Recibido."""
+def process_viejas(df_raw, lineas_codes=None, unit_mw=None, plant_prefix=None):
+    """Filter libranzas viejas: keep only Aprobado and Recibido, classify R/I."""
     if df_raw.empty: return pd.DataFrame(columns=PLANTILLA_LIB_COLS)
     keep = ["Aprobado","Recibido"]
     df = df_raw[df_raw["Último Estado"].str.strip().isin(keep)].copy()
     out_rows = []
     for _, row in df.iterrows():
+        ri = classify_libranza(row, lineas_codes, unit_mw, plant_prefix)
         out_rows.append({
             "Número":           row["Número"],
             "Tipo":             row["Tipo"],
@@ -704,21 +723,29 @@ def process_viejas(df_raw):
             "Descripción":         row["Descripción"],
             "Observaciones":       row["Observaciones"],
             "Equipos":             row["Equipos"],
-            "Libranzas Vinculadas": "",
+            "Libranzas Vinculadas": row.get("Libranzas Vinculadas",""),
             "Fecha Aprobación":    row["Fecha Aprobación"],
             "Último Estado":       row["Último Estado"],
-            "R/I":                 "",
+            "R/I":                 ri,
         })
     return pd.DataFrame(out_rows)
 
 def build_relevantes(df_nuevas, df_viejas, lineas_lookup, relevantes_anteriores=None, week_start=None):
-    """Build relevantes from R-libranzas in nuevas + viejas + previous plantilla, sorted by Fecha Inicio."""
-    rows = []
-    seen_libranzas = set()  # track by Libranza number to avoid duplicates
+    """Build relevantes: viejas first (blue), then nuevas (no color), sorted by Fecha inicio.
+    Excludes: libranza informativa, secondary linked libranzas sharing de-energization."""
+    rows      = []
+    full_data = {}   # libranza_num → full source row
+    seen      = set()
+    viejas_nums = set(str(r) for r in df_viejas["Número"].dropna()) \
+                  if df_viejas is not None and not df_viejas.empty else set()
+    DEENERG_KW = ["desenergiz","de-energiz","desconex","apertura","seccionamiento"]
 
-    def add_relevantes_from(df, classify=False):
+    def add_relevantes_from(df, classify=False, source_status="nueva"):
         if df is None or df.empty: return
         for _, row in df.iterrows():
+            desc = str(row.get("Descripción","") or "").lower()
+            if "libranza informativa" in desc or "lib. informativa" in desc:
+                continue
             ri = row.get("R/I","") if not classify else classify_libranza(row)
             if "R" not in str(ri): continue
             eq_up = str(row.get("Equipos","") or "").upper()
@@ -726,8 +753,9 @@ def build_relevantes(df_nuevas, df_viejas, lineas_lookup, relevantes_anteriores=
                 t in eq_up for t in ["LINEA","AUTOTRANSFORMADOR","BANCO DE CAPACITORES"]):
                 continue
             num = str(row.get("Número",""))
-            if num in seen_libranzas: continue
-            seen_libranzas.add(num)
+            if num in seen: continue
+            seen.add(num)
+            full_data[num] = row
             fi = parse_dt(row.get("Fecha Inicio",""))
             ff = parse_dt(row.get("Fecha Final",""))
             info = get_relevante_equipo_info(row, lineas_lookup)
@@ -745,25 +773,58 @@ def build_relevantes(df_nuevas, df_viejas, lineas_lookup, relevantes_anteriores=
                 "Estado":             row.get("Último Estado",""),
                 "Observaciones":      row.get("Observaciones",""),
                 "_sort_dt":           fi or datetime.max,
+                "_status":            source_status,
             })
 
-    add_relevantes_from(df_nuevas, classify=False)
-    add_relevantes_from(df_viejas, classify=True)
+    add_relevantes_from(df_viejas, classify=False, source_status="vieja")
+    add_relevantes_from(df_nuevas, classify=False, source_status="nueva")
 
-    # ── Carry forward from previous plantilla's Relevantes ────────────
     if relevantes_anteriores:
         for r in relevantes_anteriores:
             lib = r.get("Libranza","")
-            if not lib or lib in seen_libranzas: continue
-            # Only carry forward if still active (Fecha final >= week start)
+            if not lib or lib in seen: continue
             ff = parse_dt(r.get("Fecha final",""))
-            if week_start and ff and ff.date() < week_start:
-                continue  # expired, skip
-            seen_libranzas.add(lib)
-            rows.append({k: r[k] for k in PLANTILLA_REL_COLS} | {"_sort_dt": r.get("_sort_dt", datetime.max)})
+            if week_start and ff and ff.date() < week_start: continue
+            seen.add(lib)
+            status = "vieja" if lib in viejas_nums else "nueva"
+            rows.append({k: r[k] for k in PLANTILLA_REL_COLS} | {
+                "_sort_dt": r.get("_sort_dt", datetime.max),
+                "_status":  status,
+            })
 
-    if not rows: return pd.DataFrame(columns=PLANTILLA_REL_COLS)
-    df_out = pd.DataFrame(rows).sort_values("_sort_dt").drop(columns=["_sort_dt"])
+    # Filter secondary linked libranzas (vinculada is base → remove secondary)
+    rel_nums  = {r["Libranza"] for r in rows}
+    to_remove = set()
+    for r in rows:
+        num     = r["Libranza"]
+        src     = full_data.get(num)
+        if src is None: continue
+        vinc    = str(src.get("Libranzas Vinculadas","") or "")
+        if not vinc or vinc in ("None","nan","No hay libranzas vinculadas",""): continue
+        for vin in re.split(r"[,;\n\s]+", vinc):
+            vin = vin.strip()
+            if not vin or vin not in rel_nums: continue
+            vin_src = full_data.get(vin)
+            if vin_src is None: continue
+            fi_curr = parse_dt(src.get("Fecha Inicio",""))
+            ff_curr = parse_dt(src.get("Fecha Final",""))
+            fi_vin  = parse_dt(vin_src.get("Fecha Inicio",""))
+            ff_vin  = parse_dt(vin_src.get("Fecha Final",""))
+            if fi_curr is None or fi_vin is None: continue
+            # Vinculada (base) started before current AND current dates within base range
+            if fi_vin <= fi_curr:
+                dates_within = (ff_vin is None or ff_curr is None or
+                                fi_curr >= fi_vin and (ff_curr <= ff_vin or abs((ff_curr - ff_vin).total_seconds()) < 3600))
+                eq_c = extract_equip_codes(str(src.get("Equipos","") or ""))
+                eq_v = extract_equip_codes(str(vin_src.get("Equipos","") or ""))
+                if dates_within and eq_c & eq_v:
+                    to_remove.add(num)
+    rows = [r for r in rows if r["Libranza"] not in to_remove]
+
+    if not rows: return pd.DataFrame(columns=PLANTILLA_REL_COLS + ["_status"])
+    df_out = pd.DataFrame(rows)
+    df_out["_is_nueva"] = (df_out["_status"] == "nueva").astype(int)
+    df_out = df_out.sort_values(["_is_nueva","_sort_dt"]).drop(columns=["_is_nueva","_sort_dt"])
     return df_out.reset_index(drop=True)
 
 def build_indisponibilidades(indisp_existing, df_viejas, df_nuevas,
@@ -976,10 +1037,37 @@ def export_premisas(state):
     _hdr(ws, PLANTILLA_REL_COLS, row=2)
     df_r = state.get("prem_df_relevantes", pd.DataFrame())
     if not df_r.empty:
+        BLUE_FILL_R  = PatternFill("solid", fgColor="BDD7EE")   # blue for viejas
+        GREEN_FILL   = PatternFill("solid", fgColor="C6EFCE")   # green for Continua
+        PINK_FILL    = PatternFill("solid", fgColor="FFB6C1")   # pink for Repetitiva
+        WHITE_FILL_R = PatternFill("solid", fgColor="FFFFFF")
+
         for ri, (_, r) in enumerate(df_r.iterrows(), 3):
+            status = str(r.get("_status","")) if "_status" in r.index else ""
+            is_vieja = status == "vieja"
+            tipo_val = str(r.get("Tipo","")).strip().lower()
+
             for ci, col in enumerate(PLANTILLA_REL_COLS, 1):
-                cell = ws.cell(ri, ci, r.get(col,""))
-                cell.font = DATA_FONT; cell.border = BORD; cell.alignment = WRAP
+                val = r.get(col,"") if col in r.index else ""
+                try:
+                    cell = ws.cell(ri, ci, val)
+                    cell.font      = DATA_FONT
+                    cell.border    = BORD
+                    cell.alignment = WRAP
+                    cell.fill      = WHITE_FILL_R
+
+                    # Tipo col (ci=1): green=Continua, pink=Repetitiva
+                    if ci == 1:
+                        if "continua" in tipo_val:
+                            cell.fill = GREEN_FILL
+                        elif "repetitiva" in tipo_val:
+                            cell.fill = PINK_FILL
+
+                    # Blue ONLY on Libranza column (ci=9) for viejas
+                    elif ci == 9 and is_vieja:
+                        cell.fill = BLUE_FILL_R
+                        cell.font = Font(size=9, bold=True)
+                except: pass
 
     # ── INDISPONIBILIDADES ───────────────────────────────────────────
     BLUE_FILL  = PatternFill("solid", fgColor="BDD7EE")   # blue for viejas
@@ -1028,6 +1116,13 @@ def export_premisas(state):
 
         if not day_rows: continue
 
+        # Sort: viejas first, then nuevas; within each group by Fecha inicio ascending
+        def sort_key(r):
+            is_nueva = 1 if str(r.get("status","")) == "nueva" else 0
+            fi = parse_dt(r.get("Fecha inicio","")) or datetime.max
+            return (is_nueva, fi)
+        day_rows = sorted(day_rows, key=sort_key)
+
         WHITE_FILL = PatternFill("solid", fgColor="FFFFFF")
         NO_BORDER  = Border()
         DATA_BORD  = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
@@ -1046,7 +1141,8 @@ def export_premisas(state):
                     cell.font   = DATA_FONT
                     cell.border = DATA_BORD
                     cell.fill   = WHITE_FILL
-                    if is_vieja and ci == 8:   # col H = Libranza → blue
+                    # Blue ONLY on Libranza col (ci=8) for viejas
+                    if is_vieja and ci == 8:
                         cell.fill = BLUE_FILL
                         cell.font = Font(size=9, bold=True)
                 except: pass
@@ -1144,18 +1240,6 @@ def export_premisas(state):
 # MAIN APP
 # ══════════════════════════════════════════════════════════════════════
 def vista_premisas():
-    import gc; gc.collect()
-    import sys as _sys
-    def _L(m): print(m, file=_sys.stderr, flush=True)
-    _L("1")
-    try:
-        st.set_page_config(
-            page_title="Premisas CND", page_icon="⚡",
-            layout="wide", initial_sidebar_state="expanded"
-        )
-    except Exception:
-        pass  # already called by parent app
-    st.markdown(_PAGE_CSS, unsafe_allow_html=True)
     st.markdown("## ⚡ Módulo de Premisas")
 
     # ── Session state init ────────────────────────────────────────────
@@ -1169,22 +1253,17 @@ def vista_premisas():
     # SIDEBAR
     # ══════════════════════════════════════════════════════════════════
     with st.sidebar:
-        import gc as _gc; _gc.collect()
-        import sys as _s; _S = lambda m: print(m, file=_s.stderr, flush=True)
-        _S("sb")
-        st.title("📂 Archivos"); _S("ti")
-        st.divider(); _S("dv")
-
-        f_plantilla = st.file_uploader("1. Plantilla semana anterior", type="xlsx", key="prem_up_plantilla"); _S("u1")
-        f_nuevas    = st.file_uploader("2. libranzas_nuevas.xlsx",     type="xlsx", key="prem_up_nuevas"); _S("u2")
-        f_viejas    = st.file_uploader("3. libranzas_viejas.xlsx",     type="xlsx", key="prem_up_viejas"); _S("u3")
-        f_indisp    = st.file_uploader("4. Archivo indisponibilidades (opcional)", type="xlsx", key="prem_up_indisp"); _S("u4")
-
-        _S("pre-div")
+        st.title("📂 Archivos")
         st.divider()
-        _S("pre-btn")
+
+        f_plantilla = st.file_uploader("1. Plantilla semana anterior", type="xlsx", key="prem_up_plantilla")
+        f_nuevas    = st.file_uploader("2. libranzas_nuevas.xlsx",     type="xlsx", key="prem_up_nuevas")
+        f_viejas    = st.file_uploader("3. libranzas_viejas.xlsx",     type="xlsx", key="prem_up_viejas")
+        f_indisp    = st.file_uploader("4. Archivo indisponibilidades (opcional)", type="xlsx", key="prem_up_indisp")
+
+        st.divider()
         btn_process = st.button("⚙️ Procesar", type="primary", use_container_width=True,
-                                disabled=not (f_plantilla and f_nuevas and f_viejas)); _S("post-btn")
+                                disabled=not (f_plantilla and f_nuevas and f_viejas))
 
         if btn_process and f_plantilla and f_nuevas and f_viejas:
             with st.spinner("Procesando..."):
@@ -1212,7 +1291,7 @@ def vista_premisas():
                     week_start = next((d.date() for d in fixed if d), None)
 
                     df_nuevas    = process_nuevas(df_src_nuevas, lineas_codes, unit_mw, plant_prefix)
-                    df_viejas    = process_viejas(df_src_viejas)
+                    df_viejas    = process_viejas(df_src_viejas, lineas_codes, unit_mw, plant_prefix)
                     df_relevantes= build_relevantes(df_nuevas, df_viejas, lineas,
                                                     rel_ant, week_start)
                     indisp_data  = build_indisponibilidades(
@@ -1279,12 +1358,10 @@ def vista_premisas():
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
-        import sys as _send; print("sb-end", file=_send.stderr, flush=True)
 
     # ══════════════════════════════════════════════════════════════════
     # MAIN CONTENT
     # ══════════════════════════════════════════════════════════════════
-    import sys as _sm; print("sb-exit-done", file=_sm.stderr, flush=True)
     if st.session_state.prem_df_nuevas is None:
         st.info("👈 Cargue los archivos en el panel lateral y presione **Procesar** para comenzar.")
         return
@@ -1361,13 +1438,16 @@ def vista_premisas():
         st.subheader(f"Libranzas Viejas — Semana {cw}")
         df_v = st.session_state.prem_df_viejas.copy()
 
-        st.info(f"✅ Filtrado automático aplicado — **{len(df_v)} libranzas** con estado Aprobado o Recibido.")
+        n_r_v = df_v["R/I"].str.contains("R", na=False).sum() if "R/I" in df_v.columns else 0
+        n_i_v = df_v["R/I"].str.contains("I", na=False).sum() if "R/I" in df_v.columns else 0
+        st.info(f"✅ Filtrado automático aplicado — **{len(df_v)} libranzas** con estado Aprobado o Recibido | "
+                f"**{n_r_v} Relevantes (R)** | **{n_i_v} Indisponibilidades (I)**")
 
         buscar_v = st.text_input("🔍 Buscar por número de libranza", key="prem_search_viejas", placeholder="Ej: ETESA-571-2026")
         if buscar_v:
             df_v = df_v[df_v["Número"].astype(str).str.contains(buscar_v, case=False, na=False)]
 
-        disp_v_want = ["Número","Es repetitiva","Fecha Inicio","Fecha Final","Equipos","Descripción"]
+        disp_v_want = ["Número","Es repetitiva","Fecha Inicio","Fecha Final","Equipos","R/I","Descripción"]
         disp_v = [c for c in disp_v_want if c in df_v.columns]
         if not disp_v:
             st.warning(f"Columnas disponibles: {list(df_v.columns)}")
@@ -1378,10 +1458,8 @@ def vista_premisas():
             use_container_width=True, hide_index=True,
             num_rows="dynamic", key="prem_editor_viejas", height=500,
             column_config={
-                "Número": st.column_config.TextColumn("Número", width="medium"),
+                "R/I": st.column_config.SelectboxColumn("R/I", options=["","R","I","R-I"], width="small"),
                 "Es repetitiva": st.column_config.TextColumn("Tipo", width="small"),
-                "Fecha Inicio": st.column_config.TextColumn("Fecha Inicio", width="medium"),
-                "Fecha Final": st.column_config.TextColumn("Fecha Final", width="medium"),
                 "Equipos": st.column_config.TextColumn("Equipos", width="large"),
                 "Descripción": st.column_config.TextColumn("Descripción", width="large"),
             }
@@ -1468,8 +1546,12 @@ def vista_premisas():
 
 
 
+# ── Standalone execution ──────────────────────────────────────────────
 try:
-    vista_premisas()
-except BaseException as _e:
-    st.error(f"**Error:** {type(_e).__name__}: {_e}")
-    st.code(traceback.format_exc())
+    st.set_page_config(
+        page_title="Premisas CND", page_icon="⚡",
+        layout="wide", initial_sidebar_state="expanded"
+    )
+except Exception:
+    pass  # already set by parent app when imported
+vista_premisas()
